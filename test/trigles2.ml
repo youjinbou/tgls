@@ -103,7 +103,7 @@ let compile_shader src typ =
   let sid = Gl.create_shader typ in
   Gl.shader_source sid src;
   Gl.compile_shader sid;
-  if get_shader sid Gl.compile_status = Gl.true_ then `Ok sid else
+  if get_shader sid Gl.compile_status = 1 then `Ok sid else
   let len = get_shader sid Gl.info_log_length in
   let log = get_string len (Gl.get_shader_info_log sid len None) in
   (Gl.delete_shader sid; `Error log)
@@ -118,7 +118,7 @@ let create_program () =
   Gl.bind_attrib_location pid 0 "vertex";
   Gl.bind_attrib_location pid 1 "color";
   Gl.link_program pid;
-  if get_program pid Gl.link_status = Gl.true_ then `Ok pid else
+  if get_program pid Gl.link_status = 1 then `Ok pid else
   let len = get_program pid Gl.info_log_length in
   let log = get_string len (Gl.get_program_info_log pid len None) in
   (Gl.delete_program pid; `Error log)

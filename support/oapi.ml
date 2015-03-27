@@ -646,18 +646,31 @@ let types api =
 
 (* Enum value definitions. *)
 
+type enum_value = [ `GLbitfield of int | Capi.enum_value ]
+
 type enum =
   { enum_name : string;
     enum_c_name : string;
-    enum_value : Capi.enum_value }
+    enum_value : enum_value }
 
-let enum_rename cname = 
-  (* remove `GL_`, lowercase *)
+let mkenum enum_name enum_c_name enum_value = 
+  { enum_name; enum_c_name; enum_value }
+
+let enum_tag cname =
+  (* remove `GL_` *)
   if not (String.length cname > 3 && (String.sub cname 0 3) = "GL_")
   then failwith (err_odd_ename cname)
-  else
-    let n = String.lowercase (String.sub cname 3 (String.length cname - 3)) in
-    identifier n
+  else String.sub cname 3 (String.length cname - 3)
+
+let enum_rename cname = 
+  (* lowercase *)
+  let n = String.lowercase @@ enum_tag cname in
+  identifier n
+
+(* C enums cover only 2 types: enum and uint, and 3 underlying types: int, int64, int32
+   we need to support one more type: bitfield.
+   This last type is indicated as "bitmask" for "groups" of enums tagged "enums" in the registry. 
+ *)
 
 let enums api =
   let add_fname acc f = Sset.add (fun_name api f) acc in
@@ -665,40 +678,173 @@ let enums api =
   (* fix clashes with fun names *)
   let fclash suff n = if Sset.mem n fun_names then n ^ suff else n in
   let enum (cname, v) =
-    { enum_name = fclash "_enum" @@ enum_rename cname ; enum_c_name = cname; enum_value = v }
+    let oname = fclash "_enum" @@ enum_rename cname in
+    match Hashtbl.find (Capi.registry api).Glreg.enums cname with
+    | [] -> assert false
+    | [e_reg] -> (
+       match e_reg.Glreg.e_p_type, v with
+       | Some "bitmask", `GLenum v -> mkenum oname cname (`GLbitfield v)
+       | None, _ -> mkenum oname cname (v :> enum_value)
+       | Some "bitmask", _ -> failwith (str "enum %s is a bitfield of integral type larger than int" cname)
+       | Some typ, _ -> failwith (str "enum %s has unhandled type '%s'" cname typ)
+    )
+    | l -> failwith (str "enum %s has more than one definition?" cname)
   in
   List.map enum (Capi.enums api)
 
 (* Enum groups definitions. *)
 
-type group =
-    { group_name   : string;
-      group_c_name : string;
-      group_enums  : string list }
+type group_def =
+  [ `Enum of string list       (* really an enum *)
+  | `Bitfield of string list   (* a bitfield *)
+  | `Alias of Capi.typ ]       (* actually just a typedef *)
 
-(* grab all the groups from the registry,
-   turn them into polymorphic variant types. *)
+module Consolidate = struct
+
+  open Glreg
+  open Utils
+
+  type group = {
+    g_name        : string;
+    mutable g_def : group_def;
+    g_decl_kind   : [`Implicit | `Explicit | `Combined ];
+  }
+
+  let mk_group g_name g_def g_decl_kind =
+    { g_name; g_def; g_decl_kind }
+
+  (* we get:
+   * - groups = (name * enum name list) from capi groups
+   * - enums  = capi enums
+   * we miss:
+   * - group types, which may be either:
+   *    - enum list (non empty list from the data above)
+   *    - type alias (empty list from above AND non GLenum type in commands using them => we need to scan commands to find which is using which)
+   *    - bitfield (non empty list and bitmask tag). bitmask attribute is in each enum
+   *
+   *)
+  (* build groups out of enums and groups *)
+  let build_groups capi =
+    let r = Capi.registry capi in
+    let valid_enum =
+      let valid_enums = 
+        List.fold_left (fun set (e,_) -> Sset.add e set) Sset.empty (Capi.enums capi) in
+      fun e -> Sset.mem e valid_enums in
+    (* build groups from enums, use enum types to find out group types => only `Bitfield or `Enum *)
+    let build_implicit_groups enums =
+      (* group new definitions [ngroups] *)
+      let ngroups :  (string, group) Hashtbl.t = Hashtbl.create 503 in
+      let add_enum e_def =
+        if valid_enum e_def.e_name then
+          match e_def.e_p_group with
+            Some g_name -> (
+            try
+              let g = Hashtbl.find ngroups g_name in (* check if the group already exists *)
+              let ndef =
+                match g.g_def, e_def.e_p_type with
+                (* bitfield group *)
+                | `Bitfield el, Some "bitmask" -> `Bitfield (e_def.e_name :: el)
+                (* plain enum group *)
+                | `Enum el, None -> `Enum (e_def.e_name :: el)
+                | _, Some typ -> failwith (str "unknown enum type [%s] for enum %s" typ e_def.e_name)
+                | _ -> failwith "enum type mismatch"
+              in g.g_def <- ndef
+            with Not_found ->
+              (* create the group *)
+              let g_def =
+                match e_def.e_p_type with
+                  None -> `Enum [e_def.e_name]
+                | Some "bitmask" -> `Bitfield [e_def.e_name]
+                | Some typ -> failwith (str "unknown enum type [%s] for enum %s" typ e_def.e_name)
+              in
+              Hashtbl.add ngroups g_name { g_name; g_def; g_decl_kind = `Implicit }
+          )
+          | None -> (* warning "enum '%s' with no group\n" e_def.e_name; (*  ~5000 messages! *) *) ()
+      in
+      (* add all the enums in the new group definitions [ngroups] *)
+      Hashtbl.iter (fun _ l -> List.iter add_enum l) enums;
+      ngroups
+    in
+    (* capi group types *)
+    let gtypes =
+      let open Capi in
+      let check_arg acc arg =
+        match arg.arg_group, arg.arg_type with
+          Some group, `Base `GLbitfield -> Smap.add group (`Bitfield) acc
+        | Some group, `Base `GLenum     -> Smap.add group (`Enum) acc
+        | Some group, typ               -> Smap.add group (`Alias typ) acc
+        | None, _                       -> acc
+      in
+      List.fold_left (fun acc (_,(al,_)) -> List.fold_left check_arg acc al) Smap.empty (Capi.funs capi) in
+    (* capi groups *)
+    let groups =
+      let groups = Hashtbl.create 503 in
+      let mkgroup (g, el) =
+        match List.filter valid_enum el, Smap.find g gtypes with
+        | [], (`Enum | `Bitfield) -> warning "group %s became empty after enum filtering, dropping it\n" g
+        | l, _  -> Hashtbl.add groups g l
+      in
+      List.iter mkgroup (Capi.groups capi);
+      groups in
+    let ngroups = build_implicit_groups r.enums in
+    (* merge sets of groups *)
+    let merge_list l1 l2 =
+      let set = List.fold_left (fun set e -> Sset.add e set) Sset.empty l1 in
+      let set = List.fold_left (fun set e -> Sset.add e set) set l2 in
+      Sset.elements set in
+    info "groups : explicit %d, implicit %d\n" (Hashtbl.length groups) (Hashtbl.length ngroups);
+    (* include all the explicit groups to the implicit (generated) groups *)
+    let fold (* ngroups *) name g =
+      let typ = Smap.find name gtypes in
+(*
+      if g = [] then warning "group %s is empty (type is alias: %s)\n" name (match typ with `Alias _ -> "true" | _ -> "false");
+ *)
+      try let ng = Hashtbl.find ngroups name in
+          match ng.g_def, typ with
+          | `Enum group, `Enum         -> 
+             Hashtbl.replace ngroups name @@
+               mk_group ng.g_name (`Enum (merge_list g group)) `Combined
+          | `Bitfield group, `Bitfield -> 
+             Hashtbl.replace ngroups name @@
+               mk_group ng.g_name (`Bitfield (merge_list g group)) `Combined
+          | _, (`Alias _ as typ)       ->
+             Hashtbl.replace ngroups name @@
+               mk_group ng.g_name typ `Combined
+          | _ -> failwith (str "type mismatch for group [%s]" name)
+      with Not_found -> 
+        match typ with
+        | `Enum           -> Hashtbl.add ngroups name @@ mk_group name (`Enum g) `Explicit
+        | `Bitfield       -> Hashtbl.add ngroups name @@ mk_group name (`Bitfield g) `Explicit
+        | `Alias _ as typ -> Hashtbl.add ngroups name @@ mk_group name typ `Explicit
+    in
+    Hashtbl.iter fold groups;
+    info "groups : total %d\n" (Hashtbl.length ngroups);
+    ngroups
+
+end
+
+type group = {
+  group_name   : string;
+  group_c_name : string;
+  group_def    : group_def;
+}
+
+let mkgroup group_name group_c_name group_def =
+  let group_def =
+    match group_def with
+    | `Enum l -> `Enum (List.map enum_rename l)
+    | `Bitfield l -> `Bitfield (List.map enum_rename l)
+    | d -> d
+  in
+  { group_name; group_c_name; group_def }
+
 let groups (api : Capi.t) =
   (* construct all the groups from the registry implicit and explicit defs *)
-  let ngroups = Consolidate.build_groups @@ Capi.registry api in
-  let module S = Set.Make(struct type t = string * group let compare (_,g1) (_,g2) = String.compare g1.group_name g2.group_name end) in
-  let mk_group _ g set = (* we don't handle type yet *)
-    let open Consolidate in
-    let {g_name; g_def; g_decl_kind; _ (* g_type *)} = g in
-    match g_def with
-    | [] -> set (* skip empty groups *)
-    | _  -> S.add ( g_name, { group_name = group_rename g_name; group_c_name = g_name; group_enums = List.map (enum_rename) g_def}) set
-  in
-  (* we want to keep the groups which are actually referenced by functions in the feature set 
-   * we're interested about *)
-  let get_cgroups set (_, (args, _)) =
-    List.fold_left (fun set arg -> match arg.Capi.arg_group with None -> set | Some g -> Sset.add g set) set args
-  in 
-  let valid_groups = List.fold_left get_cgroups Sset.empty (Capi.funs api) in
-  Hashtbl.fold mk_group ngroups S.empty
-  |> S.elements
-  |> fun l -> List.fold_right (fun (n,g) acc -> if Sset.mem n valid_groups then g::acc else acc) l []
-
+  let open Consolidate in
+  let ngroups = build_groups api in
+  Hashtbl.fold (fun name g acc -> mkgroup (group_rename name) name g.g_def::acc) ngroups []
+                              
+  
 (*---------------------------------------------------------------------------
    Copyright (c) 2013 Daniel C. Bünzli.
    All rights reserved.

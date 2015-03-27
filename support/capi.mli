@@ -101,10 +101,6 @@ val enums : t -> enum list
 
 type group = string * string list
 (** The type for a C enum group, a name and a list of names *)
-(* Note: 
- * Should it return the actual list of enumerators instead? 
- * This isn't needed by the program, but a proper API might require that 
- *)
 
 val groups : t -> group list
 (** [groups api] are the C enum groups of [api]. *)

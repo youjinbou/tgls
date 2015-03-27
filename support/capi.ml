@@ -60,13 +60,9 @@ let id_of_string s =
 
 (* Get C function and enum names for an API in the registry *)
 
-let with_interface_names op (funs, enums as acc) i = match i.Glreg.i_type with
-| `Command -> (op i.Glreg.i_name funs, enums)
-| `Enum -> (funs, op i.Glreg.i_name enums)
-| `Type (* useless in current registry *) -> acc
-
-let extract_group_names r enum_names =
-  let foldf k el acc =
+let extract_group_names r enum_names fun_names =
+(*
+  let enum_foldf k el acc =
     let foldl acc e =
       match e.Glreg.e_p_group with
       | Some group -> Sset.add group acc
@@ -76,7 +72,29 @@ let extract_group_names r enum_names =
     then List.fold_left foldl acc el
     else acc
   in
-  Hashtbl.fold foldf r.Glreg.enums Sset.empty
+  let enum_groups = Hashtbl.fold enum_foldf r.Glreg.enums Sset.empty
+ *)
+  let fun_foldf k el acc =
+    let foldl acc (s, p) =
+      match p.Glreg.p_group with
+      | Some g -> Sset.add g acc
+      | None -> acc
+    in
+    if Sset.mem k fun_names
+    then List.fold_left (fun acc e -> List.fold_left foldl acc e.Glreg.c_params) acc el
+    else acc
+  in
+  let fun_groups =  Hashtbl.fold fun_foldf r.Glreg.commands Sset.empty in
+(*
+  Sset.union enum_groups fun_groups
+ *)
+  fun_groups
+
+
+let with_interface_names op (funs, enums as acc) i = match i.Glreg.i_type with
+| `Command -> (op i.Glreg.i_name funs, enums)
+| `Enum -> (funs, op i.Glreg.i_name enums)
+| `Type (* useless in current registry *) -> acc
 
 let names_api_profile r ~api profile version =
   let features = try Hashtbl.find r.Glreg.features api with
@@ -105,7 +123,7 @@ let names_api_profile r ~api profile version =
     acc
   in
   let fun_names, enum_names = List.fold_left add_feature (Sset.empty, Sset.empty) features in
-  let group_names = extract_group_names r enum_names in
+  let group_names = extract_group_names r enum_names fun_names in
   `Ok (fun_names, enum_names, group_names)
 
 let names_ext r ext profile =
@@ -114,7 +132,7 @@ let names_ext r ext profile =
     let x = Hashtbl.find r.Glreg.extensions ext in
     let acc = (Sset.empty, Sset.empty) in
     let fun_names, enum_names = List.fold_left (with_interface_names Sset.add) acc x.Glreg.x_require in
-    let group_names = extract_group_names r enum_names in
+    let group_names = extract_group_names r enum_names fun_names in
     `Ok (fun_names, enum_names, group_names)
   with Not_found -> `Error (err_ext ext)
 
@@ -358,7 +376,7 @@ let groups api =
       (e_def.Glreg.g_name, e_def.Glreg.g_enums)::acc
     with Not_found -> 
       warning "no definition for group %s\n" e;
-      (*failwith (err_group_undef e) *) acc
+      (*failwith (err_group_undef e) *) (e, [])::acc
   in
   List.fold_right group (Sset.elements api.group_names) []
 

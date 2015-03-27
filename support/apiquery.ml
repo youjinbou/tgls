@@ -76,6 +76,7 @@ let pp_fun api ppf f =
 let pp_enum api ppf e =
   let v = match e.Oapi.enum_value with
   | `GLenum v -> str "@[GLenum 0x%04X@]" v
+  | `GLbitfield v -> str "@[GLbitfield 0x%04X@]" v
   | `GLuint v -> str "@[GLuint 0x%04lX@]" v
   | `GLuint64 v -> str "@[GLuint64 0x%04LX@]" v
   in
@@ -85,7 +86,11 @@ let pp_group api ppf e =
   let pp_enums ppf l =
     List.iter (fun s -> pp ppf " %s," s) l
   in
-  pp ppf "@[<h>enum %s {%a}@]" e.Oapi.group_c_name pp_enums e.Oapi.group_enums 
+  match e.Oapi.group_def with
+  | `Enum l -> pp ppf "@[<h>enum %s {%a}@]" e.Oapi.group_c_name pp_enums l
+  | `Bitfield l -> pp ppf "@[<h>bitfield %s {%a}@]" e.Oapi.group_c_name pp_enums l
+  | `Alias s -> pp ppf "@[<h>alias %s %a@]"e.Oapi.group_c_name (pp_type api) s
+  
 
 let api_query ppf api q =
   let log = Format.err_formatter in

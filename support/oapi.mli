@@ -103,19 +103,27 @@ val funs : t -> func list
 
 (** {1:enums Enums} *)
 
+type enum_value = [ `GLbitfield of int | Capi.enum_value ]
+
 type enum =
   { enum_name : string;
     enum_c_name : string; (* used by apiquery *)
-    enum_value : Capi.enum_value }
+    enum_value : enum_value }
 (** The type for OCaml's representation of C enums. *)
 
 val enums : t -> enum list
 (** [enums api] is the enums of [api]. *)
 
+
+type group_def =
+  [ `Enum of string list       (* really an enum *)
+  | `Bitfield of string list   (* a bitfield *)
+  | `Alias of Capi.typ  ]      (* actually just a typedef *)
+
 type group =
     { group_name : string;
       group_c_name : string;  (* used by apiquery *)
-      group_enums : string list }
+      group_def : group_def }
 (** The type for OCaml's representation of C enum groups. *)
 
 val groups : t -> group list

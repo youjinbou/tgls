@@ -198,7 +198,8 @@ let pp_ml_fun ~log api ppf f = match f.Oapi.fun_def with
 (* Enum generation *)
 
 let pp_ml_enum_value name ppf = function
-| `GLenum e -> pp ppf "0x%X" e
+| `GLenum e
+| `GLbitfield e -> pp ppf "0x%X" e
 | `GLuint i -> pp ppf "0x%lXl" i
 | `GLuint64 i -> pp ppf "0x%LXL" i
 
@@ -211,6 +212,7 @@ let pp_ml_group_enums ppf = function
 
 let pp_mli_enum_type name ppf = function
 | `GLenum e -> pp ppf "[>`%s] enum" (String.uppercase name)
+| `GLbitfield e -> pp ppf "[>`%s] bitfield" (String.uppercase name)
 | `GLuint i -> pp ppf "int32"
 | `GLuint64 i -> pp ppf "int64"
 
@@ -223,8 +225,13 @@ let pp_ml_enum api ppf e =
     e.Oapi.enum_name (pp_ml_enum_value e.Oapi.enum_name) e.Oapi.enum_value
 
 let pp_mli_group api ppf e =
-  pp ppf "@[type %s =@ %a@]@,"
-    e.Oapi.group_name pp_ml_group_enums e.Oapi.group_enums
+  match e.Oapi.group_def with
+  | `Alias name -> ()
+  | `Bitfield []
+  | `Enum [] -> failwith (str "group %s turned out empty!\n" e.Oapi.group_name)
+  | `Bitfield l
+  | `Enum l -> pp ppf "@[type %s =@ %a@]@,"
+                  e.Oapi.group_name pp_ml_group_enums l
 
 let pp_ml_group = pp_mli_group
 

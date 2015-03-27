@@ -438,21 +438,32 @@ let decode d = try
 with
 | Failure e -> `Error e | Xmlm.Error (_, e) -> `Error (Xmlm.error_message e)
 
-let ht_patch addf h1 h2 =
-  Hashtbl.iter (addf h1) h2
+let ht_patch patchf h1 h2 =
+  Hashtbl.iter (patchf h1) h2
 
-let update ht k v =
+let replace ht k v =
   try Hashtbl.replace ht k v
   with Not_found -> Hashtbl.add ht k v
 
+let update updatef ht k v =
+  try 
+    let orig = Hashtbl.find ht k in
+    Hashtbl.replace ht k (updatef orig v)
+  with Not_found -> Hashtbl.add ht k v
+
+let list_update updatef namef orig patch =
+  let patch = Smap.of_list namef patch in
+  let update smap e = try updatef e (Smap.find (namef e) smap) with Not_found -> e in
+  List.map (update patch) orig
+
 (* update r1 with r2 content *)
 let patch r1 r2 =
-  ht_patch update r1.types r2.types;
-  ht_patch update r1.groups r2.groups;
-  ht_patch update r1.enums r2.enums;
-  ht_patch update r1.commands r2.commands;
-  ht_patch update r1.features r2.features;
-  ht_patch update r1.extensions r2.extensions;
+  ht_patch replace r1.types r2.types;
+  ht_patch replace r1.groups r2.groups;
+  ht_patch replace r1.enums r2.enums;
+  ht_patch replace r1.commands r2.commands;
+  ht_patch (update List.append) r1.features r2.features;
+  ht_patch replace r1.extensions r2.extensions;
   r1
   
 

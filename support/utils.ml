@@ -4,10 +4,27 @@ let pp = Format.fprintf
 
 (* String maps and sets *)
 
-module Smap = Map.Make(String)
+module Smap = struct
+
+  include Map.Make(String)
+
+
+  let map f s = fold (fun n e acc -> add n (f e) acc) s empty
+
+  let of_list fname l =
+    List.fold_right (fun e acc -> add (fname e) e acc) l empty
+
+end
+
 module Sset = struct
+
   include Set.Make(String)
+
   let map f s = fold (fun e acc -> add (f e) acc) s empty
+
+  let of_list l =
+    List.fold_right add l empty
+
 end
 
 let caml_to_underscores offset cname =
