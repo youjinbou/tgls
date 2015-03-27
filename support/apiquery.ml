@@ -21,9 +21,12 @@ let pp_ocaml_type_def ppf = function
 | `Unknown _ -> pp ppf "unknown"
 | `Ok def ->
     let name = def.Oapi.type_name in
-    let odef = match def.Oapi.type_def with
+    let rec odef = function
     | `Builtin -> name | `Alias a | `Abstract a -> str "type %s = %s" name a
+    | `Constructor c -> odef (Oapi.constructor_apply c None).Oapi.type_def
+    | `Apply (typ,group) -> assert false
     in
+    let odef = odef def.Oapi.type_def in
     let ctypes = match def.Oapi.type_ctypes with
     | `Builtin c | `Builtin_wrap_in (c, _) | `View (c, _, _, _)
     | `Def (c, _) -> c
@@ -78,6 +81,12 @@ let pp_enum api ppf e =
   in
   pp ppf "@[<h>%s %s (%s)@]" v e.Oapi.enum_c_name e.Oapi.enum_name
 
+let pp_group api ppf e =
+  let pp_enums ppf l =
+    List.iter (fun s -> pp ppf " %s," s) l
+  in
+  pp ppf "@[<h>enum %s {%a}@]" e.Oapi.group_c_name pp_enums e.Oapi.group_enums 
+
 let api_query ppf api q =
   let log = Format.err_formatter in
   let pp_defs pp_v defs = pp ppf "@[<v>%a@,@]" (pp_list (pp_v api)) defs in
@@ -85,6 +94,7 @@ let api_query ppf api q =
   | `Types -> pp_defs pp_type (Capi.types api); `Ok
   | `Funs -> pp_defs pp_fun (Oapi.funs api); `Ok
   | `Enums -> pp_defs pp_enum (Oapi.enums api); `Ok
+  | `Groups -> pp_defs pp_group (Oapi.groups api); `Ok
   | `Mli -> pp ppf "%a" (Gen.pp_api_mli ~log) api; `Ok
   | `Ml -> pp ppf "%a" (Gen.pp_api_ml ~log) api; `Ok
   | `List -> assert false
@@ -103,29 +113,47 @@ let list_apis reg =
   let exts = Hashtbl.fold add_extension reg.Glreg.extensions [] in
   List.sort compare (List.rev_append exts features)
 
+let default_inf = "regs/gl.xml"
+
 let process inf api_id profile query =
-  try
-    let inf = match inf with None -> "support/gl.xml" | Some inf -> inf in
-    let ic = if inf = "-" then stdin else open_in inf in
-    let d = Glreg.decoder (`Channel ic) in
-    try match Glreg.decode d with
-    | `Ok reg ->
-        close_in ic;
-        begin match query with
-        | `List ->
-            List.iter (pp Format.std_formatter "%s@\n") (list_apis reg);
-            exit 0
-        | query ->
-            begin match Capi.create reg api_id profile with
-            | `Error e -> Printf.eprintf "%s: %s\n%!" exec e; `Error
-            | `Ok api -> api_query Format.std_formatter api query
-            end
-        end
-    | `Error e ->
-        let (l0, c0), (l1, c1) = Glreg.decoded_range d in
-        Printf.eprintf "%s:%d.%d-%d.%d: %s\n%!" inf l0 c0 l1 c1 e; `Error
-    with e -> close_in ic; raise e
-  with Sys_error e -> Printf.eprintf "%s\n%!" e; `Error
+  let process_query api_id profile query = function
+      | `Ok reg -> 
+         begin
+           match query with
+           | `List ->
+              List.iter (pp Format.std_formatter "%s@\n") (list_apis reg);
+              exit 0
+           | query ->
+              begin match Capi.create reg api_id profile with
+                    | `Error e -> Printf.eprintf "%s: %s\n%!" exec e; `Error
+                    | `Ok api -> api_query Format.std_formatter api query
+              end
+         end
+      | `Error -> `Error
+  and process_file inf =
+    try
+      let ic = if inf = "-" then stdin else open_in inf in
+      let d = Glreg.decoder (`Channel ic) in
+      try match Glreg.decode d with
+          | `Ok reg ->
+             close_in ic; `Ok reg
+          | `Error e ->
+             let (l0, c0), (l1, c1) = Glreg.decoded_range d in
+             Printf.eprintf "%s:%d.%d-%d.%d: %s\n%!" inf l0 c0 l1 c1 e; `Error
+      with e -> close_in ic; raise e
+    with Sys_error e -> Printf.eprintf "%s\n%!" e; `Error
+  in
+  let patch acc reg =
+    match acc, reg with
+      `Ok acc, `Ok reg -> `Ok (Glreg.patch acc reg)
+    | _ -> acc
+  in
+  let reg =
+    match inf with
+    | [] -> process_file default_inf
+    | i::is -> List.fold_left (fun acc reg ->  patch acc @@ process_file reg) (process_file i) is
+  in
+  process_query api_id profile query reg
 
 let main () =
   let usage = str
@@ -134,10 +162,13 @@ let main () =
        \ INFILE defaults to support/gl.xml\n\
        Options:" exec
   in
-  let inf = ref None in
+  let inf = ref [] in
   let set_inf f =
+  (*
     if !inf = None then inf := Some f else
     raise (Arg.Bad "only one registry file can be specified")
+ *)
+    inf := f::!inf
   in
   let query = ref `Funs in
   let set_query v () = query := v in
@@ -157,13 +188,15 @@ let main () =
     " print API functions and their signature";
     "-enums", Arg.Unit (set_query `Enums),
     " print API enums and their value";
+    "-groups", Arg.Unit (set_query `Groups),
+    " print API enums groups";
     "-ml", Arg.Unit (set_query `Ml),
     " print ml file for binding the API";
     "-mli", Arg.Unit (set_query `Mli),
     " print mli file for binding the API"; ]
   in
   Arg.parse (Arg.align options) set_inf usage;
-  match process !inf !api_id !profile !query with
+  match process (List.rev !inf) !api_id !profile !query with
   | `Ok -> exit 0 | `Error -> exit 1
 
 let () = main ()

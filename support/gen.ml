@@ -37,29 +37,59 @@ let pp_mli_type api ppf t =
   | None -> ()
   | Some t -> pp ppf "@[(** %s *)@]@,@," t
   in
-  begin match t.Oapi.type_def with
-  | `Builtin -> ()
-  | `Alias a -> pp ppf "@[type %s = %s@]@," t.Oapi.type_name a; pp_doc ()
-  | `Abstract _ -> pp ppf "@[type %s@]@," t.Oapi.type_name; pp_doc ()
-  end
+  let def ppf t =
+    begin match t.Oapi.type_def with
+    | `Abstract _ -> ()
+    | `Alias a -> pp ppf " = %s" a; pp_doc ()
+    | `Apply (c,d) -> pp ppf "%s %s" d c.Oapi.type_name 
+    | `Constructor _ -> assert false
+    | `Builtin -> assert false
+    end
+  in
+    begin match t.Oapi.type_def with
+    | `Builtin -> ()
+    | `Alias a -> pp ppf "@[type %s = %s@]@," t.Oapi.type_name a; pp_doc ()
+    | `Abstract _ -> pp ppf "@[type %s@]@," t.Oapi.type_name; pp_doc ()
+    | `Constructor c -> pp ppf "@[type _ %s%a@]@," c.Oapi.type_name def c; pp_doc ()
+    | `Apply (c, d) when t.Oapi.type_name <> "" -> pp ppf "@[type %s%a@]@," t.Oapi.type_name def t; pp_doc ()
+    | `Apply (_,_) -> ()
+    end;
+    begin match t.Oapi.type_interface with
+    | None -> ()
+    | Some (iface,_) -> List.iter (pp ppf "@[%s@]@,") iface
+    end
 
 let pp_ml_type acc api ppf t = (* [acc] remembers views already printed *)
+  let def ppf t =
+    begin match t.Oapi.type_def with
+    | `Abstract a
+    | `Alias a -> pp ppf " = %s" a
+    | `Apply (c,d) -> pp ppf "%s %s" d c.Oapi.type_name 
+    | `Constructor _ -> assert false
+    | `Builtin -> assert false
+    end
+  in
   begin match t.Oapi.type_def with
-  | `Builtin -> ()
-  | `Alias a | `Abstract a ->
-      pp ppf "@[type %s = %s@]@," t.Oapi.type_name a;
+    | `Builtin -> ()
+    | `Alias a | `Abstract a -> pp ppf "@[type %s = %s@]@," t.Oapi.type_name a;
+    | `Constructor c -> pp ppf "@[type _ %s%a@]@," c.Oapi.type_name def c
+    | `Apply (c,d) when t.Oapi.type_name <> "" ->  pp ppf "@[type %s %a@]@," t.Oapi.type_name def t
+    | `Apply (_,_) -> ()
   end;
-  begin match t.Oapi.type_ctypes with
-  | `Builtin _ | `Builtin_wrap_in _ -> acc
-  | `Def (n, s) ->
-      if List.mem n acc then acc else (pp ppf "@[%s@]@,@," s; n :: acc)
-  | `View (n, r, w, t) ->
-      if List.mem n acc then acc else
-      (pp ppf "@[let %s =@\n\
-                 \  view ~read:%s@\n\
-                 \       ~write:%s@\n\
-                 \       %s@]@,@," n r w t; n :: acc)
-  end
+  begin match t.Oapi.type_interface with
+    | None -> ()
+    | Some (_,impl) -> List.iter (pp ppf "@[%s@]@,") impl
+  end;
+  match t.Oapi.type_ctypes with
+    | `Builtin _ | `Builtin_wrap_in _ -> acc
+    | `Def (n, s) ->
+       if List.mem n acc then acc else (pp ppf "@[%s@]@,@," s; n :: acc)
+    | `View (n, r, w, t) ->
+       if List.mem n acc then acc else
+         (pp ppf "@[let %s =@\n\
+                  \  view ~read:%s@\n\
+                  \       ~write:%s@\n\
+                  \       %s@]@,@," n r w t; n :: acc)
 
 let pp_ml_types api ppf l =
   let rec loop acc = function
@@ -68,15 +98,23 @@ let pp_ml_types api ppf l =
   in
   loop [] l
 
+
+let uniq l =
+  let rec uniq acc = function
+    | [] -> List.rev acc
+    | x::y::xs when compare x y = 0 -> uniq acc (x::xs)
+    | x::xs -> uniq (x::acc) xs
+  in uniq [] l
+
 let sort_types ts =
   let compare t t' =
     (* Only [debug_proc] depends on the others, put it at the end.
        We then generate defs in the order given by this function. *)
-    if t.Oapi.type_name = "debug_proc" then 1 else
-    if t'.Oapi.type_name = "debug_proc" then -1 else
+    if t.Oapi.type_name = "'a debug_proc" then 1 else
+    if t'.Oapi.type_name = "'a debug_proc" then -1 else
     compare t t'
   in
-  List.sort compare ts
+  List.sort compare ts |> uniq
 
 (* Function generation. *)
 
@@ -95,7 +133,12 @@ let pp_mli_fun ~log api ppf f = match f.Oapi.fun_def with
     pp ppf "@[val %s@ : unit@ -> unit@]@," f.Oapi.fun_name;
     pp ppf "(** @[\xE2\x9C\x98 %a *)@]@," (pp_linked_fun_name ~log api) cname
 | `Derived (args, ret) ->
-    let pp_arg_typ ppf a = pp ppf "%s" Oapi.(a.arg_type.type_name) in
+    let pp_arg_typ ppf t =
+      let open Oapi in
+      match t.type_name, t.type_def with
+      | "", `Apply(c,p) -> pp ppf "%s %s" p c.type_name
+      | s, `Constructor c -> pp ppf "'a %s" s
+      | s, _  -> pp ppf "%s" s in
     let pp_arg_typ_sep ppf () = pp ppf " ->@ " in
     let pp_arg ppf a = match a.Oapi.arg_name with
     | "" -> pp ppf "()"
@@ -107,9 +150,9 @@ let pp_mli_fun ~log api ppf f = match f.Oapi.fun_def with
     in
     let fname = f.Oapi.fun_name in
     let cname, _ = f.Oapi.fun_c in
-    pp ppf "@[<2>val %s@ : %a ->@ %s@]@,"
-      fname (pp_list ~pp_sep:pp_arg_typ_sep pp_arg_typ) args
-      ret.Oapi.type_name;
+    pp ppf "@[<2>val %s@ : %a ->@ %a@]@,"
+      fname (pp_list ~pp_sep:pp_arg_typ_sep (fun ppf a -> pp_arg_typ ppf a.Oapi.arg_type)) args
+       pp_arg_typ ret;
     pp ppf "(** @[<v>@[<2>%a@ [%a]@]%a *)@]@,"
       (pp_linked_fun_name ~log api) cname
       (pp_list ~pp_sep:pp_arg_sep pp_arg) args
@@ -154,23 +197,36 @@ let pp_ml_fun ~log api ppf f = match f.Oapi.fun_def with
 
 (* Enum generation *)
 
-let pp_ml_enum_value ppf = function
+let pp_ml_enum_value name ppf = function
 | `GLenum e -> pp ppf "0x%X" e
 | `GLuint i -> pp ppf "0x%lXl" i
 | `GLuint64 i -> pp ppf "0x%LXL" i
 
-let pp_mli_enum_type ppf = function
-| `GLenum e -> pp ppf "enum"
+let pp_ml_group_enums ppf = function
+    [] -> assert false
+  | [e] -> pp ppf "@[<hov 2>[ `%s ]@]" (String.uppercase e)
+  | e::es -> 
+     pp ppf "@[<hov 2>[ `%s@;%a]@]" (String.uppercase e)
+          (fun ppf es -> List.iter (fun s -> pp ppf "| `%s@;" @@ String.uppercase s) es) es
+
+let pp_mli_enum_type name ppf = function
+| `GLenum e -> pp ppf "[>`%s] enum" (String.uppercase name)
 | `GLuint i -> pp ppf "int32"
 | `GLuint64 i -> pp ppf "int64"
 
 let pp_mli_enum api ppf e =
   pp ppf "@[val %s : %a@]@,"
-    e.Oapi.enum_name pp_mli_enum_type e.Oapi.enum_value
+    e.Oapi.enum_name (pp_mli_enum_type e.Oapi.enum_name) e.Oapi.enum_value
 
 let pp_ml_enum api ppf e =
   pp ppf "@[<2>let %s =@ %a@]"
-    e.Oapi.enum_name pp_ml_enum_value e.Oapi.enum_value
+    e.Oapi.enum_name (pp_ml_enum_value e.Oapi.enum_name) e.Oapi.enum_value
+
+let pp_mli_group api ppf e =
+  pp ppf "@[type %s =@ %a@]@,"
+    e.Oapi.group_name pp_ml_group_enums e.Oapi.group_enums
+
+let pp_ml_group = pp_mli_group
 
 (* Module signature generation *)
 
@@ -194,6 +250,8 @@ let pp_mli_module ~log ppf api =
         string. *)@,@,\
      \  (** {1:types Types} *)@,@,\
      \  @[<v>%a@]@,\
+     \  (** {1:groups Groups} *)@,@,\
+     \  @[<v>%a@]@,\
      \  (** {1:funs Functions} *)@,@,\
      \  @[<v>%a@]@,\
      \  (** {1:enums Enums} *)@,@,\
@@ -202,6 +260,8 @@ let pp_mli_module ~log ppf api =
     synopsis synopsis (Oapi.module_bind api)
     (pp_list ~pp_sep:pp_nop (pp_mli_type api))
     (sort_types (Oapi.types api))
+    (pp_list (pp_mli_group api))
+    (Oapi.groups api)
     (pp_list (pp_mli_fun ~log api))
     (Oapi.funs api)
     (pp_list (pp_mli_enum api))
@@ -272,6 +332,8 @@ let pp_ml_module ~log ppf api =
      \   with Exit -> Buffer.contents b@,@,\
      \  (* Types *)@,@,\
      \  @[<v>%a@]@,\
+     \  (* Groups *)@,@,\
+     \  @[<v>%a@]@,\
      \  (* Functions *)@,@,\
      \  let stub = true@,@,\
      \  @[<v>%a@]@,@,\
@@ -281,6 +343,8 @@ let pp_ml_module ~log ppf api =
     (Oapi.doc_synopsis api) (Oapi.module_bind api)
     (pp_ml_types api)
     (sort_types (Oapi.types api))
+    (pp_list (pp_ml_group api))
+    (Oapi.groups api)
     (pp_list (pp_ml_fun ~log api))
     (Oapi.funs api)
     (pp_list (pp_ml_enum api))

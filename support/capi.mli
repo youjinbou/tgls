@@ -36,6 +36,8 @@ val id : t -> id
 val profile : t -> string option
 (** [id api] is the profile of [api]. *)
 
+val registry : t -> Glreg.t
+
 (** {1:types C types} *)
 
 type base_type =
@@ -92,10 +94,20 @@ type enum_value = [ `GLenum of int | `GLuint64 of int64 | `GLuint of int32]
 (** The type for C enumeration values. *)
 
 type enum = string * enum_value
-(** The type for C enumerations, a name and and a value. *)
+(** The type for a C enumerator, a name and a value. *)
 
 val enums : t -> enum list
 (** [enums api] are the C enums of [api]. *)
+
+type group = string * string list
+(** The type for a C enum group, a name and a list of names *)
+(* Note: 
+ * Should it return the actual list of enumerators instead? 
+ * This isn't needed by the program, but a proper API might require that 
+ *)
+
+val groups : t -> group list
+(** [groups api] are the C enum groups of [api]. *)
 
 (*---------------------------------------------------------------------------
    Copyright 2013 Daniel C. Bünzli.

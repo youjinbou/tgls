@@ -25,6 +25,8 @@ val is_arg_voidp_or_index : string -> string -> bool
 (** [is_voidp_or_index f arg] is [true] if the argument named [arg] of the
     C function [f] can be either a pointer or an integer index. *)
 
+
+
 (*---------------------------------------------------------------------------
    Copyright (c) 2013 Daniel C. Bünzli.
    All rights reserved.

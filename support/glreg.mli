@@ -124,6 +124,8 @@ val decoded_range : decoder -> (int * int) * (int * int)
     decoded by [d]. A pair of line and column numbers respectively
     one and zero based. *)
 
+val patch : t -> t -> t
+
 (*---------------------------------------------------------------------------
    Copyright 2013 Daniel C. Bünzli.
    All rights reserved.

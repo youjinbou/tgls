@@ -4,22 +4,13 @@
    %%NAME%% release %%VERSION%%
   ---------------------------------------------------------------------------*)
 
-let str = Printf.sprintf
-let pp = Format.fprintf
+open Utils
 
 (* Error string *)
 
 let err_odd_fname f = str "Odd function name for OpenGL: `%s'" f
 let err_odd_ename e = str "Odd enumerant name for OpenGL: `%s'" e
 let err_no_type_def t = str "No OCaml type definition for %s" t
-
-(* String maps and sets *)
-
-module Smap = Map.Make(String)
-module Sset = struct
-  include Set.Make(String)
-  let map f s = fold (fun e acc -> add (f e) acc) s empty
-end
 
 (* API *)
 
@@ -70,14 +61,17 @@ let module_bind api = match (Capi.id api) with
 
 type ctypes =
   [ `Builtin of string
-  | `View of string * string * string * string
+  | `View of string * string * string * string  (* ctype name * project * inject * c type *)
   | `Builtin_wrap_in of string * (Format.formatter -> string -> unit)
   | `Def of string * string ]
 
 type typ =
   { type_name : string;
-    type_def : [ `Alias of string | `Abstract of string | `Builtin ];
+    type_def : [ `Alias of string | `Abstract of string | `Builtin
+               | `Constructor of typ
+               | `Apply of typ * string ];
     type_ctypes : ctypes;
+    type_interface : (string list * string list) option;
     type_doc : string option; }
 
 let bool =
@@ -88,18 +82,21 @@ let bool =
                          "(fun b -> Unsigned.UChar.(of_int \
                           (Pervasives.compare b false)))",
                          "uchar");
+    type_interface = None;
     type_doc = None; }
 
 let char =
   { type_name = "char";
     type_def = `Builtin;
     type_ctypes = `Builtin "uchar";
+    type_interface = None;
     type_doc = None; }
 
 let int8 =
   { type_name = "int8";
     type_def = `Alias "int";
     type_ctypes = `Builtin "char";
+    type_interface = None;
     type_doc = None; }
 
 let uint8 =
@@ -108,24 +105,28 @@ let uint8 =
     type_ctypes = `View ("int_as_uint8_t",
                          "Unsigned.UInt8.to_int", "Unsigned.UInt8.of_int",
                          "uint8_t");
+    type_interface = None;
     type_doc = None; }
 
 let int16 =
   { type_name = "int16";
     type_def = `Alias "int";
     type_ctypes = `Builtin "short";
+    type_interface = None;
     type_doc = None }
 
 let uint16 =
   { type_name = "uint16";
     type_def = `Alias "int";
     type_ctypes = `Builtin "short";
+    type_interface = None;
     type_doc = None }
 
 let int =
   { type_name = "int";
     type_def = `Builtin;
     type_ctypes = `Builtin "int";
+    type_interface = None;
     type_doc = None }
 
 let intptr = int
@@ -138,12 +139,14 @@ let uint =
     type_ctypes = `View ("int_as_uint",
                       "Unsigned.UInt.to_int", "Unsigned.UInt.of_int",
                       "uint");
+    type_interface = None;
     type_doc = None; }
 
 let int32 =
   { type_name = "int32";
     type_def = `Builtin;
     type_ctypes = `Builtin "int32_t";
+    type_interface = None;
     type_doc = None; }
 
 let uint32 =
@@ -152,12 +155,14 @@ let uint32 =
     type_ctypes = `View ("int32_as_uint32_t",
                       "Unsigned.UInt32.to_int32", "Unsigned.UInt32.of_int32",
                       "uint32_t");
+    type_interface = None;
     type_doc = None; }
 
 let int64 =
   { type_name = "int64";
     type_def = `Builtin;
     type_ctypes = `Builtin "int64_t";
+    type_interface = None;
     type_doc = None; }
 
 let uint64 =
@@ -166,28 +171,55 @@ let uint64 =
     type_ctypes = `View ("int64_as_uint64_t",
                       "Unsigned.UInt64.to_int64", "Unsigned.UInt64.of_int64",
                       "uint64_t");
+    type_interface = None;
     type_doc = None; }
 
 let float32 =
   { type_name = "float";
     type_def = `Builtin;
     type_ctypes = `Builtin "float";
+    type_interface = None;
     type_doc = None }
 
 let float64 =
   { type_name = "float";
     type_def = `Builtin;
     type_ctypes = `Builtin "double";
+    type_interface = None;
     type_doc = None; }
 
 let clampx =
   { uint32 with type_name = "clampx"; }
 
+(* c bitfields are mapped to a parameterized type 'a bitfields where 'a is a phantom type.
+ * when printed as a constructor, show the parameter as 'a 
+ * otherwise, show the actual parameter (see [gen.ml])
+ *)
 let bitfield =
-  { uint with type_name = "bitfield"; type_def = `Alias "int";}
+  let core = { 
+    uint with type_name = "bitfield"; 
+              type_def = `Abstract "int";
+              type_interface = Some ([
+                                      "val bor  : 'a bitfield -> 'a bitfield -> 'a bitfield";
+                                      "val band : 'a bitfield -> 'a bitfield -> 'a bitfield"],
+                                     ["let bor  = (lor)";
+                                      "let band = (land)"]);
+  } in
+  { uint with type_name = "bitfield"; 
+              type_def = `Constructor core;
+  }
 
+(* c enums are mapped to a parameterized type 'a enum where 'a is a phantom type.
+ * when printed as a constructor, show the parameter as 'a 
+ * otherwise, show the actual parameter (see [gen.ml])
+ *)
 let enum =
-  { uint with type_name = "enum"; type_def = `Alias "int" }
+  let core = { uint with type_name = "enum"; type_def = `Abstract "int" } in
+  { uint with type_name = "enum"; type_def = `Constructor core }
+
+(* monomorphic equivalent to enum *)
+let type_enum =
+  { uint with type_name = "type_enum"; type_def = `Abstract "int" }
 
 let fixed =
   { int32 with type_name = "fixed"; type_def = `Alias "int32" }
@@ -198,30 +230,35 @@ let sync =
     type_ctypes = `Def ("sync",
                         "let sync : sync typ = ptr void\n  \
                          let sync_opt : sync option typ = ptr_opt void");
+    type_interface = None;
     type_doc = None; }
 
 let debug_proc =
-  { type_name = "debug_proc";
-    type_def = `Alias "enum -> enum -> int -> enum -> string -> unit";
+  { type_name = "'a debug_proc";
+    type_def = `Alias "'a enum -> 'a enum -> int -> 'a enum -> string -> unit";
     type_ctypes = `Builtin "(assert false)"; (* Unused, manual *)
+    type_interface = None;
     type_doc = None; }
 
 let void =
   { type_name = "unit";
     type_def = `Builtin;
     type_ctypes = `Builtin "void";
+    type_interface = None;
     type_doc = None }
 
 let string =
   { type_name = "string";
     type_def = `Builtin;
     type_ctypes = `Builtin "string";
+    type_interface = None;
     type_doc = None }
 
 let string_opt =
   { type_name = "string option";
     type_def = `Builtin;
     type_ctypes = `Builtin "string_opt";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_voidp name =
@@ -242,108 +279,126 @@ let ba_as_charp =
   { type_name = "(char, Bigarray.int8_unsigned_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_charp";
+    type_interface = None;
     type_doc = None }
 
 let ba_opt_as_charp =
   { type_name = "(char, Bigarray.int8_unsigned_elt) bigarray option";
     type_def = `Builtin;
     type_ctypes = ba_opt_as_voidp "ba_opt_as_charp";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_int8p =
   { type_name = "(int, Bigarray.int8_signed_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_int8p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_uint8p =
   { type_name = "(int, Bigarray.int8_unsigned_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_uint8p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_int16p =
   { type_name = "(int, Bigarray.int16_signed_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_int16p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_uint16p =
   { type_name = "(int, Bigarray.int16_unsigned_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_uint16p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_int32p =
   { type_name = "(int32, Bigarray.int32_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_int32p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_uint32p =
   { type_name = "uint32_bigarray";
     type_def = `Alias "(int32, Bigarray.int32_elt) bigarray";
     type_ctypes = ba_as_voidp "ba_as_uint32p";
+    type_interface = None;
     type_doc = None }
 
 let ba_opt_as_uint32p =
   { type_name = "uint32_bigarray option";
     type_def = `Builtin;
     type_ctypes = ba_opt_as_voidp "ba_opt_as_uint32p";
+    type_interface = None;
     type_doc = None }
 
 let ba_opt_as_int32p =
   { type_name = "(int32, Bigarray.int32_elt) bigarray option";
     type_def = `Builtin;
     type_ctypes = ba_opt_as_voidp "ba_opt_as_int32p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_enump =
   { type_name = "enum_bigarray";
     type_def = `Alias "(int32, Bigarray.int32_elt) bigarray";
     type_ctypes = ba_as_voidp "ba_as_enump";
+    type_interface = None;
     type_doc = None }
 
 let ba_opt_as_enump =
   { type_name = "enum_bigarray option";
     type_def = `Builtin;
     type_ctypes = ba_opt_as_voidp "ba_opt_as_enump";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_nativeintp =
   { type_name = "(nativeint, Bigarray.nativeint_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_nativeint";
+    type_interface = None;
     type_doc = None }
 
 let ba_opt_as_nativeintp =
   { type_name = "(nativeint, Bigarray.nativeint_elt) bigarray option";
     type_def = `Builtin;
     type_ctypes = ba_opt_as_voidp "ba_opt_as_nativeint";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_float32p =
   { type_name = "(float, Bigarray.float32_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_float32p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_float64p =
   { type_name = "(float, Bigarray.float64_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_float64p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_int64p =
   { type_name = "(int64, Bigarray.int64_elt) bigarray";
     type_def = `Builtin;
     type_ctypes = ba_as_voidp "ba_as_int64p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_uint64p =
   { type_name = "uint64_bigarray";
     type_def = `Alias "(int64, Bigarray.int64_elt) bigarray";
     type_ctypes = ba_as_voidp "ba_as_uint64p";
+    type_interface = None;
     type_doc = None }
 
 let ba_as_voidp =
@@ -355,6 +410,7 @@ let ba_as_voidp =
   { type_name = "('a, 'b) bigarray";
     type_def = `Builtin;
     type_ctypes = `Builtin_wrap_in ("(ptr void)", pp_wrap);
+    type_interface = None;
     type_doc = None; }
 
 let ba_opt_as_voidp =
@@ -368,6 +424,7 @@ let ba_opt_as_voidp =
   { type_name = "('a, 'b) bigarray option";
     type_def = `Builtin;
     type_ctypes = `Builtin_wrap_in ("(ptr void)", pp_wrap);
+    type_interface = None;
     type_doc = None }
 
 let ba_or_offset_as_voidp =
@@ -382,6 +439,7 @@ let ba_or_offset_as_voidp =
   { type_name = "[ `Offset of int | `Data of ('a, 'b) bigarray ]";
     type_def = `Builtin;
     type_ctypes = `Builtin_wrap_in ("(ptr void)", pp_wrap);
+    type_interface = None;
     type_doc = None }
 
 let type_def api t =
@@ -476,19 +534,10 @@ let fun_name api f = (* remove `gl', uncamlcase, lowercase *)
   if not (String.length cname > 3 && String.sub cname 0 2 = "gl")
   then failwith (err_odd_fname cname)
   else
-  let is_upper c = 'A' <= c && c <= 'Z' in
-  let is_digit c = '0' <= c && c <= '9'  in
-  let buf = Buffer.create (String.length cname) in
-  let last_up = ref true (* avoids prefix by _ *) in
-  for i = 2 to String.length cname - 1 do
-    if is_upper cname.[i] &&
-       not (!last_up) &&
-       not (is_digit (cname.[i - 1])) (* maps eg 2D to 2d not 2_d *)
-    then (Buffer.add_char buf '_'; last_up := true)
-    else (last_up := false);
-    Buffer.add_char buf (Char.lowercase cname.[i]);
-  done;
-  identifier (Buffer.contents buf)
+  identifier (caml_to_underscores 2 cname)
+
+let group_rename cname =
+  identifier @@ caml_to_underscores 0 cname
 
 let derived_doc = function
 | "glMultiDrawElements" | "glMultiDrawElementsBaseVertex" ->
@@ -508,8 +557,22 @@ let derived_doc = function
           error (or not)."
 | _ -> None
 
-let derived api (fn, (cargs, cret) as cdef) =
-  let arg_type t =
+(*
+let typ_var name =
+  { type_name = name; type_def = `Abstract name; type_ctypes = `Builtin "void"; type_interface = None;
+    type_doc = None }
+ *)
+
+(* make a new type expression out of a constructor and a group name *)
+let constructor_apply def group =
+  let construct td group =  { td with type_name = "" ; type_def = `Apply (td, group) }  in
+  match def.type_def, group with
+  | `Constructor c, Some group -> construct def @@ group_rename group
+  | _ -> def
+
+(* build an Ocaml function prototype out of its C counterpart *) 
+let derived api (fn, (cargs, cret) as cdef : Capi.func) =
+  let arg_type group t =
     let t = match t with
     | `Const (`Ptr (`Const (`Ptr (`Base `Void)))) ->
         begin match fn with
@@ -521,17 +584,20 @@ let derived api (fn, (cargs, cret) as cdef) =
     in
     match type_def api t with
     | `Unknown _ -> raise Exit
-    | `Ok def -> def
+    | `Ok def -> constructor_apply def group
   in
-  let ret_type = arg_type  (* nothing special for now *) in
+  let ret_type = arg_type None (* nothing special for now *) in
   let arg a =
     { arg_name = a.Capi.arg_name;
-      arg_type = arg_type a.Capi.arg_type }
+      arg_type = arg_type a.Capi.arg_group a.Capi.arg_type }
   in
   try
     let fun_name = fun_name api cdef in
     let fun_def = `Derived (List.map arg cargs, ret_type cret) in
-    Some { fun_name; fun_c = cdef; fun_def; fun_doc = derived_doc fn }
+    Some { fun_name; 
+           fun_c = cdef;
+           fun_def;
+           fun_doc = derived_doc fn }
   with Exit -> None
 
 let unbound api f = (* unbound functions, list them here *)
@@ -559,15 +625,24 @@ let funs api =
   List.map func (Capi.funs api)
 
 let types api =
-  let add_type acc t = if List.memq t acc then acc else t :: acc in
+  let rec add_type acc t =
+    match t.type_def with
+      | `Apply(c,_) when t.type_name = "" -> 
+         (* a simple type expression by convention, but we still need the constructor *)
+         add_type acc c
+      | `Apply(c,_) -> 
+         (* a full type definition, we need both the type and the constructor *)
+         let acc = add_type acc c in
+         if Smap.mem t.type_name acc then acc else Smap.add t.type_name t acc
+      | _ -> if Smap.mem t.type_name acc then acc else Smap.add t.type_name t acc in
   let add_arg_type acc arg = add_type acc arg.arg_type in
   let add_types acc f = match f.fun_def with
   | `Derived (args, ret) ->
       List.fold_left add_arg_type (add_type acc ret) args
   | _ -> acc
   in
-  let manual = [ debug_proc ] in
-  List.fold_left add_types manual (funs api)
+  let manual = Smap.singleton debug_proc.type_name debug_proc in
+  List.rev @@ Smap.fold (fun _ t l -> t::l) (List.fold_left add_types manual (funs api)) []
 
 (* Enum value definitions. *)
 
@@ -576,20 +651,53 @@ type enum =
     enum_c_name : string;
     enum_value : Capi.enum_value }
 
+let enum_rename cname = 
+  (* remove `GL_`, lowercase *)
+  if not (String.length cname > 3 && (String.sub cname 0 3) = "GL_")
+  then failwith (err_odd_ename cname)
+  else
+    let n = String.lowercase (String.sub cname 3 (String.length cname - 3)) in
+    identifier n
+
 let enums api =
   let add_fname acc f = Sset.add (fun_name api f) acc in
   let fun_names = List.fold_left add_fname Sset.empty (Capi.funs api) in
+  (* fix clashes with fun names *)
+  let fclash suff n = if Sset.mem n fun_names then n ^ suff else n in
   let enum (cname, v) =
-    (* remove `GL_`, lowercase, fix clashes with fun names *)
-    if not (String.length cname > 3 && (String.sub cname 0 3) = "GL_")
-    then failwith (err_odd_ename cname)
-    else
-    let n = String.lowercase (String.sub cname 3 (String.length cname - 3)) in
-    let n = identifier n in
-    let n = if Sset.mem n fun_names then n ^ "_enum" else n in
-    { enum_name = n; enum_c_name = cname; enum_value = v }
+    { enum_name = fclash "_enum" @@ enum_rename cname ; enum_c_name = cname; enum_value = v }
   in
   List.map enum (Capi.enums api)
+
+(* Enum groups definitions. *)
+
+type group =
+    { group_name   : string;
+      group_c_name : string;
+      group_enums  : string list }
+
+(* grab all the groups from the registry,
+   turn them into polymorphic variant types. *)
+let groups (api : Capi.t) =
+  (* construct all the groups from the registry implicit and explicit defs *)
+  let ngroups = Consolidate.build_groups @@ Capi.registry api in
+  let module S = Set.Make(struct type t = string * group let compare (_,g1) (_,g2) = String.compare g1.group_name g2.group_name end) in
+  let mk_group _ g set = (* we don't handle type yet *)
+    let open Consolidate in
+    let {g_name; g_def; g_decl_kind; _ (* g_type *)} = g in
+    match g_def with
+    | [] -> set (* skip empty groups *)
+    | _  -> S.add ( g_name, { group_name = group_rename g_name; group_c_name = g_name; group_enums = List.map (enum_rename) g_def}) set
+  in
+  (* we want to keep the groups which are actually referenced by functions in the feature set 
+   * we're interested about *)
+  let get_cgroups set (_, (args, _)) =
+    List.fold_left (fun set arg -> match arg.Capi.arg_group with None -> set | Some g -> Sset.add g set) set args
+  in 
+  let valid_groups = List.fold_left get_cgroups Sset.empty (Capi.funs api) in
+  Hashtbl.fold mk_group ngroups S.empty
+  |> S.elements
+  |> fun l -> List.fold_right (fun (n,g) acc -> if Sset.mem n valid_groups then g::acc else acc) l []
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2013 Daniel C. Bünzli.

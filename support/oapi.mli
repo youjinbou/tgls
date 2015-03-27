@@ -51,8 +51,10 @@ type ctypes =
 
 type typ =
   { type_name : string;
-    type_def : [ `Alias of string | `Abstract of string | `Builtin ];
+    type_def : [ `Alias of string | `Abstract of string | `Builtin
+               | `Constructor of typ | `Apply of typ * string ];
     type_ctypes : ctypes;
+    type_interface : (string list * string list) option;
     type_doc : string option; }
 (** The type for OCaml types and their definitions. *)
 
@@ -62,6 +64,9 @@ val type_def : t -> Capi.typ -> [ `Ok of typ | `Unknown of string ]
 
 val types : t -> typ list
 (** [types api] are the OCaml types mentioned in [api]. *)
+
+val constructor_apply : typ -> string option -> typ
+(** [constructor_apply typ group] tries to monomorphize the type [typ] with parameter [group] *) 
 
 (** {1:funs Functions} *)
 
@@ -100,12 +105,21 @@ val funs : t -> func list
 
 type enum =
   { enum_name : string;
-    enum_c_name : string;
+    enum_c_name : string; (* used by apiquery *)
     enum_value : Capi.enum_value }
 (** The type for OCaml's representation of C enums. *)
 
 val enums : t -> enum list
 (** [enums api] is the enums of [api]. *)
+
+type group =
+    { group_name : string;
+      group_c_name : string;  (* used by apiquery *)
+      group_enums : string list }
+(** The type for OCaml's representation of C enum groups. *)
+
+val groups : t -> group list
+(** [groups api] is the list of enum groups of [api]. *)
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2013 Daniel C. Bünzli.

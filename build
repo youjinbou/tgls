@@ -4,8 +4,28 @@
 
 set -e
 
+REGDIR=regs
+
+REGFILES=${REGFILES:="gl.xml"}
+
 OCAMLBUILD=${OCAMLBUILD:="ocamlbuild -tag debug -tag annot -classic-display \
                           -use-ocamlfind"}
+
+map()
+{
+    local f=$1
+    shift
+    for n in $*; do
+        $f $n
+    done
+}
+
+add_dir()
+{
+    echo -n "$REGDIR/$1 "
+}
+
+REGS=$(map add_dir $REGFILES)
 
 action () 
 {
@@ -13,15 +33,15 @@ action ()
       default)      $OCAMLBUILD $* ;;
       apiquery)     $OCAMLBUILD apiquery.native ;;
       support)      action apiquery
-                    check_reg
-                    ./apiquery.native -mli -api gl3.3 > src/tgl3.mli
-                    ./apiquery.native -ml -api gl3.3 > src/tgl3.ml
-                    ./apiquery.native -mli -api gl4.5 > src/tgl4.mli
-                    ./apiquery.native -ml -api gl4.5 > src/tgl4.ml
-                    ./apiquery.native -mli -api gles2.0 > src/tgles2.mli
-                    ./apiquery.native -ml -api gles2.0 > src/tgles2.ml
-                    ./apiquery.native -mli -api gles3.1 > src/tgles3.mli
-                    ./apiquery.native -ml -api gles3.1 > src/tgles3.ml
+                    check_regs
+                    ./apiquery.native $REGS -mli -api gl3.3 > src/tgl3.mli
+                    ./apiquery.native $REGS -ml -api gl3.3 > src/tgl3.ml
+                    ./apiquery.native $REGS -mli -api gl4.5 > src/tgl4.mli
+                    ./apiquery.native $REGS -ml -api gl4.5 > src/tgl4.ml
+                    ./apiquery.native $REGS -mli -api gles2.0 > src/tgles2.mli
+                    ./apiquery.native $REGS -ml -api gles2.0 > src/tgles2.ml
+                    ./apiquery.native $REGS -mli -api gles3.1 > src/tgles3.mli
+                    ./apiquery.native $REGS -ml -api gles3.1 > src/tgles3.ml
                     ;;
       tgls)         $OCAMLBUILD \
                     tgl3.cmxa dlltgl3.so \
@@ -39,12 +59,14 @@ action ()
     esac
 } 
 
-check_reg ()
+check_regs ()
 {
-    if [ ! -f "support/gl.xml" ]; then 
-        echo "Missing file support/gl.xml, see DEVEL.md"
-        exit 1
-    fi
+    for file in $REGFILES; do
+        if [ ! -f "$REGDIR/$file" ]; then 
+            echo "Missing file $REGDIR/$file, see DEVEL.md"
+            exit 1
+        fi
+    done
 }
 
 if [ $# -eq 0 ]; 

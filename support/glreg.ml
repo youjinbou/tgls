@@ -4,7 +4,8 @@
    %%NAME%% release %%VERSION%%
   ---------------------------------------------------------------------------*)
 
-let str = Printf.sprintf
+open Utils
+
 let str_of_name (u,l) = str "{%s}%s" u l
 let split_string s sep =
   let rec split accum j =
@@ -113,6 +114,7 @@ let add_command r n c = add_list r.commands n c
 let add_feature r n f = add_list r.features n f
 let add_extension r n x = add err_ext_def r.extensions n x
 
+      
 (* Decode *)
 
 (* XML names *)
@@ -216,7 +218,7 @@ let p_group r d atts =
       end
   | `El_start _ -> skip_el d; loop acc r d
   | `El_end ->
-      add_group r g_name { g_name; g_enums = (List.rev acc); }
+      add_group r g_name { g_name; g_enums = (List.rev acc) }
   | `Data _ -> err err_data
   | _ -> assert false
   in
@@ -435,6 +437,25 @@ let decode d = try
   end;
 with
 | Failure e -> `Error e | Xmlm.Error (_, e) -> `Error (Xmlm.error_message e)
+
+let ht_patch addf h1 h2 =
+  Hashtbl.iter (addf h1) h2
+
+let update ht k v =
+  try Hashtbl.replace ht k v
+  with Not_found -> Hashtbl.add ht k v
+
+(* update r1 with r2 content *)
+let patch r1 r2 =
+  ht_patch update r1.types r2.types;
+  ht_patch update r1.groups r2.groups;
+  ht_patch update r1.enums r2.enums;
+  ht_patch update r1.commands r2.commands;
+  ht_patch update r1.features r2.features;
+  ht_patch update r1.extensions r2.extensions;
+  r1
+  
+
 
 (*---------------------------------------------------------------------------
    Copyright 2013 Daniel C. Bünzli.

@@ -13,7 +13,7 @@ let get_uri api f = match Doc.man_uri api f with
 
 let glCreateShaderProgramv api = str
 "\
-val create_shader_programv : enum -> string -> int
+val create_shader_programv : _ enum -> string -> int
 (** {{:%s}
     [glCreateShaderProgramv]} [type_ source] *)
 "
@@ -30,7 +30,7 @@ let create_shader_programv type_ src =
 
 let glDebugMessageCallback api = str
 "\
-val debug_message_callback : debug_proc -> unit
+val debug_message_callback : _ debug_proc -> unit
 (** {{:%s}
     [glDebugMessageCallback]} [f] *)
 "
@@ -73,7 +73,7 @@ let get_uniform_indices program names indices =
 
 let glMapBuffer api = str
 "\
-val map_buffer : enum -> int -> enum -> ('a, 'b) Bigarray.kind ->
+val map_buffer : buffer_target_arb enum -> int -> buffer_access_arb enum -> ('a, 'b) Bigarray.kind ->
   ('a, 'b) bigarray
 (** {{:%s}
     [glMapBuffer]} [target length access kind]
@@ -98,7 +98,7 @@ let map_buffer target len access kind =
 
 let glMapNamedBuffer api = str
 "\
-val map_named_buffer : enum -> int -> enum -> ('a, 'b) Bigarray.kind ->
+val map_named_buffer : _ enum -> int -> _ enum -> ('a, 'b) Bigarray.kind ->
   ('a, 'b) bigarray
 (** {{:%s}
     [glMapNamedBuffer]} [buffer length access kind]
@@ -123,7 +123,7 @@ let map_named_buffer buffer len access kind =
 
 let glMapBufferRange api = str
 "\
-val map_buffer_range : enum -> int -> int -> enum ->
+val map_buffer_range : _ enum -> int -> int -> _ enum ->
   ('a, 'b) Bigarray.kind -> ('a, 'b) bigarray
 (** {{:%s}
     [glMapBufferRange]} [target offset length access kind]
@@ -149,7 +149,7 @@ let map_buffer_range target offset len access kind =
 
 let glMapNamedBufferRange api = str
 "\
-val map_named_buffer_range : enum -> int -> int -> enum ->
+val map_named_buffer_range : _ enum -> int -> int -> _ enum ->
   ('a, 'b) Bigarray.kind -> ('a, 'b) bigarray
 (** {{:%s}
     [glMapNamedBufferRange]} [buffer offset length access kind]
@@ -192,7 +192,7 @@ let shader_source sh src =
 
 let glTransformFeedbackVaryings api = str
 "\
-val transform_feedback_varyings : int -> string list -> enum -> unit
+val transform_feedback_varyings : int -> string list -> _ enum -> unit
 (** {{:%s}
     [glTransformFeedbackVaryings]} [program varyings bufferMode] *)"
 (get_uri api "glTransformFeedbackVaryings"),

@@ -4,8 +4,7 @@
    %%NAME%% release %%VERSION%%
   ---------------------------------------------------------------------------*)
 
-let str = Printf.sprintf
-let pp = Format.fprintf
+open Utils
 
 (* Error strings *)
 
@@ -28,13 +27,8 @@ let err_enum_undef e = str "No definition for enum `%s'" e
 let err_enum_parse e v t = str "Could not parse enum `%s' as `%s' (`%s')" e t v
 let err_enum_type t e = str "Unsupported: enum type `%s' for `%s'" t e
 
-(* String maps and sets *)
+let err_group_undef e = str "No definition for group `%s'" e
 
-module Smap = Map.Make(String)
-module Sset = struct
-  include Set.Make(String)
-  let map f s = fold (fun e acc -> add (f e) acc) s empty
-end
 
 (* API identifiers *)
 
@@ -71,6 +65,19 @@ let with_interface_names op (funs, enums as acc) i = match i.Glreg.i_type with
 | `Enum -> (funs, op i.Glreg.i_name enums)
 | `Type (* useless in current registry *) -> acc
 
+let extract_group_names r enum_names =
+  let foldf k el acc =
+    let foldl acc e =
+      match e.Glreg.e_p_group with
+      | Some group -> Sset.add group acc
+      | _ -> acc
+    in
+    if Sset.mem k enum_names
+    then List.fold_left foldl acc el
+    else acc
+  in
+  Hashtbl.fold foldf r.Glreg.enums Sset.empty
+
 let names_api_profile r ~api profile version =
   let features = try Hashtbl.find r.Glreg.features api with
   | Not_found -> assert false
@@ -97,14 +104,18 @@ let names_api_profile r ~api profile version =
     let acc = List.fold_left (with_interface_names Sset.remove) acc rems in
     acc
   in
-  `Ok (List.fold_left add_feature (Sset.empty, Sset.empty) features)
+  let fun_names, enum_names = List.fold_left add_feature (Sset.empty, Sset.empty) features in
+  let group_names = extract_group_names r enum_names in
+  `Ok (fun_names, enum_names, group_names)
 
 let names_ext r ext profile =
   try
     (* doc says no removes in exts, altough this is allowed by the schema *)
     let x = Hashtbl.find r.Glreg.extensions ext in
     let acc = (Sset.empty, Sset.empty) in
-    `Ok (List.fold_left (with_interface_names Sset.add) acc x.Glreg.x_require)
+    let fun_names, enum_names = List.fold_left (with_interface_names Sset.add) acc x.Glreg.x_require in
+    let group_names = extract_group_names r enum_names in
+    `Ok (fun_names, enum_names, group_names)
   with Not_found -> `Error (err_ext ext)
 
 let registry_api r id = match id with
@@ -129,20 +140,22 @@ type t =
     id : id;
     profile : string option;
     fun_names : Sset.t;                  (* C functions names in the API. *)
-    enum_names : Sset.t;                (* C enumerants names in the API. *) }
+    enum_names : Sset.t;                 (* C enumerants names in the API. *)
+    group_names: Sset.t;                 (* C enumerant group names in the API. *) }
 
 let create registry id profile =
   let registry_api = registry_api registry id in
   match names registry id profile with
   | `Error _ as e -> e
-  | `Ok (fun_names, enum_names) ->
+  | `Ok (fun_names, enum_names, group_names) ->
       let profile = match id with
       | `Ext _ | `Gles _ -> None | _ -> Some profile
       in
-      `Ok { registry; registry_api; id; profile; fun_names; enum_names; }
+      `Ok { registry; registry_api; id; profile; fun_names; enum_names; group_names}
 
 let id api = api.id
 let profile api = api.profile
+let registry api = api.registry
 
 let lookup_fun registry f =
   try match Hashtbl.find registry.Glreg.commands f with
@@ -335,6 +348,19 @@ let enums api =
     e, v
   in
   List.map enum (Sset.elements api.enum_names)
+
+type group = string * string list
+
+let groups api =
+  let group e acc =
+    try
+      let e_def = Hashtbl.find api.registry.Glreg.groups e in
+      (e_def.Glreg.g_name, e_def.Glreg.g_enums)::acc
+    with Not_found -> 
+      warning "no definition for group %s\n" e;
+      (*failwith (err_group_undef e) *) acc
+  in
+  List.fold_right group (Sset.elements api.group_names) []
 
 (*---------------------------------------------------------------------------
    Copyright 2013 Daniel C. Bünzli.

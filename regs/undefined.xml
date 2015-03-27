@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<registry>
+    <groups>
+        <group undefined="true" name="ArrayObjectPNameATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ArrayObjectUsageATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="BinormalPointerTypeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerBiasNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerComponentUsageNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerMappingNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerParameterNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerPortionNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerRegisterNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerScaleNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerStageNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="CombinerVariableNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="DataTypeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ElementPointerTypeATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="EvalMapsModeNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="EvalTargetNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="FenceConditionNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="FenceNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="FenceParameterNameNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="FragmentOpATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="GetMultisamplePNameNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="GetTexBumpParameterATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="GetVariantValueEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="Half16NV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="handleARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="IglooFunctionSelectSGIX">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="IglooParameterSGIX">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ImageTransformPNameHP">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ImageTransformTargetHP">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="IndexFunctionEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="LightTextureModeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="LightTexturePNameEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="MapAttribParameterNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="MapParameterNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="MapTypeNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ObjectTypeAPPLE">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="OcclusionQueryParameterNameNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ParameterRangeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="Path">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathColor">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathColorFormat">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathCommand">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathCoordType">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathCoverMode">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathElement">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathElementType">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathFillMode">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathFontStyle">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathFontTarget">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathGenMode">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathHandleMissingGlyphs">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathMetricMask">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathParameter">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathStringFormat">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PathTransformType">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PixelDataRangeTargetNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PixelTransformPNameEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PixelTransformTargetEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PNTrianglesPNameATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PointParameterNameARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="PreserveModeATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramCharacterNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramFormat">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramFormatARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramProperty">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramPropertyARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramStringProperty">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramStringPropertyARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramTarget">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ProgramTargetARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="Renderbuffer">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="RenderbufferParameterName">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ReplacementCodeSUN">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ReplacementCodeTypeSUN">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="SampleMaskNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="SamplePatternEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="ScalarType">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="SelectName">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="SpriteParameterNameSGIX">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="SwizzleOpATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="TangentPointerTypeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="TexBumpParameterATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="TextureComponentCount">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="TextureFilterSGIS">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="TextureNormalModeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VariantCapEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="vdpauSurfaceNV">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexArrayPNameAPPLE">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexAttribPropertyARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexBufferObjectAccess">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexBufferObjectParameter">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexBufferObjectUsage">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexShaderCoordOutEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexShaderOpEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexShaderParameterEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexShaderStorageTypeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexShaderWriteMaskEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexStreamATI">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="VertexWeightPointerTypeEXT">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="WeightPointerTypeARB">
+            <enum name="GL_DUMMY"/>
+        </group>
+        <group undefined="true" name="WinCoord">
+            <enum name="GL_DUMMY"/>
+        </group>
+    </groups>
+</registry>
+
+<!-- 
+     Local Variables:
+     nxml-child-indent: 4
+     End:
+-->
