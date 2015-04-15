@@ -199,14 +199,14 @@ let bitfield =
   let core = { 
     uint with type_name = "bitfield"; 
               type_def = `Abstract "int";
+  } in
+  { uint with type_name = "bitfield"; 
+              type_def = `Constructor core;
               type_interface = Some ([
                                       "val bor  : 'a bitfield -> 'a bitfield -> 'a bitfield";
                                       "val band : 'a bitfield -> 'a bitfield -> 'a bitfield"],
                                      ["let bor  = (lor)";
                                       "let band = (land)"]);
-  } in
-  { uint with type_name = "bitfield"; 
-              type_def = `Constructor core;
   }
 
 (* c enums are mapped to a parameterized type 'a enum where 'a is a phantom type.
@@ -829,20 +829,24 @@ type group = {
   group_def    : group_def;
 }
 
-let mkgroup group_name group_c_name group_def =
+let mkgroup fclash group_name group_c_name group_def =
   let group_def =
     match group_def with
-    | `Enum l -> `Enum (List.map enum_rename l)
-    | `Bitfield l -> `Bitfield (List.map enum_rename l)
+    | `Enum l -> `Enum (List.map (fun n -> fclash "_enum" @@ enum_rename n) l)
+    | `Bitfield l -> `Bitfield (List.map (fun n -> fclash "_enum" @@ enum_rename n) l)
     | d -> d
   in
   { group_name; group_c_name; group_def }
 
 let groups (api : Capi.t) =
+  let add_fname acc f = Sset.add (fun_name api f) acc in
+  let fun_names = List.fold_left add_fname Sset.empty (Capi.funs api) in
+  (* fix clashes with fun names *)
+  let fclash suff n = if Sset.mem n fun_names then n ^ suff else n in
   (* construct all the groups from the registry implicit and explicit defs *)
   let open Consolidate in
   let ngroups = build_groups api in
-  Hashtbl.fold (fun name g acc -> mkgroup (group_rename name) name g.g_def::acc) ngroups []
+  Hashtbl.fold (fun name g acc -> mkgroup fclash (group_rename name) name g.g_def::acc) ngroups []
                               
   
 (*---------------------------------------------------------------------------

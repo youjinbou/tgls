@@ -32,54 +32,63 @@ let pp_text ?(verb = false) ppf s =
 
 (* Type generation. *)
 
-let pp_mli_type api ppf t =
-  let pp_doc () = match t.Oapi.type_doc with
+(* mli -=-=-=- *)
+let pp_mli_type_doc api ppf t =
+  match t.Oapi.type_doc with
   | None -> ()
   | Some t -> pp ppf "@[(** %s *)@]@,@," t
-  in
+
+let pp_mli_type_interface api ppf t =
+  match t.Oapi.type_interface with
+  | None -> ()
+  | Some (iface,_) -> List.iter (pp ppf "@[%s@]@,") iface
+
+let pp_mli_type_def api ppf t =
   let def ppf t =
-    begin match t.Oapi.type_def with
+    match t.Oapi.type_def with
     | `Abstract _ -> ()
-    | `Alias a -> pp ppf " = %s" a; pp_doc ()
-    | `Apply (c,d) -> pp ppf "%s %s" d c.Oapi.type_name 
+    | `Alias a -> pp ppf " = %s" a; ()
+    | `Apply (c,d) -> pp ppf "%s %s" d c.Oapi.type_name
     | `Constructor _ -> assert false
     | `Builtin -> assert false
-    end
   in
-    begin match t.Oapi.type_def with
-    | `Builtin -> ()
-    | `Alias a -> pp ppf "@[type %s = %s@]@," t.Oapi.type_name a; pp_doc ()
-    | `Abstract _ -> pp ppf "@[type %s@]@," t.Oapi.type_name; pp_doc ()
-    | `Constructor c -> pp ppf "@[type _ %s%a@]@," c.Oapi.type_name def c; pp_doc ()
-    | `Apply (c, d) when t.Oapi.type_name <> "" -> pp ppf "@[type %s%a@]@," t.Oapi.type_name def t; pp_doc ()
-    | `Apply (_,_) -> ()
-    end;
-    begin match t.Oapi.type_interface with
-    | None -> ()
-    | Some (iface,_) -> List.iter (pp ppf "@[%s@]@,") iface
-    end
+  match t.Oapi.type_def with
+    | `Builtin -> false
+    | `Alias a -> pp ppf "@[type %s = %s@]@," t.Oapi.type_name a; true
+    | `Abstract _ -> pp ppf "@[type %s@]@," t.Oapi.type_name; true
+    | `Constructor c -> pp ppf "@[type _ %s%a@]@," c.Oapi.type_name def c; true
+    | `Apply (c, d) when t.Oapi.type_name <> "" -> pp ppf "@[type %s%a@]@," t.Oapi.type_name def t; true
+    | `Apply (_,_) -> false
 
-let pp_ml_type acc api ppf t = (* [acc] remembers views already printed *)
+let pp_mli_type api ppf t =
+  if pp_mli_type_def api ppf t then pp_mli_type_doc api ppf t;
+  pp_mli_type_interface api ppf t
+
+(* ml -=-=-=- *)
+let pp_ml_type_interface api ppf t =
+  match t.Oapi.type_interface with
+  | None -> ()
+  | Some (_,impl) -> List.iter (pp ppf "@[%s@]@,") impl
+
+let pp_ml_type_def api ppf t =
   let def ppf t =
-    begin match t.Oapi.type_def with
+    match t.Oapi.type_def with
     | `Abstract a
     | `Alias a -> pp ppf " = %s" a
     | `Apply (c,d) -> pp ppf "%s %s" d c.Oapi.type_name 
     | `Constructor _ -> assert false
     | `Builtin -> assert false
-    end
   in
-  begin match t.Oapi.type_def with
+  match t.Oapi.type_def with
     | `Builtin -> ()
     | `Alias a | `Abstract a -> pp ppf "@[type %s = %s@]@," t.Oapi.type_name a;
     | `Constructor c -> pp ppf "@[type _ %s%a@]@," c.Oapi.type_name def c
     | `Apply (c,d) when t.Oapi.type_name <> "" ->  pp ppf "@[type %s %a@]@," t.Oapi.type_name def t
     | `Apply (_,_) -> ()
-  end;
-  begin match t.Oapi.type_interface with
-    | None -> ()
-    | Some (_,impl) -> List.iter (pp ppf "@[%s@]@,") impl
-  end;
+
+let pp_ml_type acc api ppf t = (* [acc] remembers views already printed *)
+  pp_ml_type_def api ppf t;
+  pp_ml_type_interface api ppf t;
   match t.Oapi.type_ctypes with
     | `Builtin _ | `Builtin_wrap_in _ -> acc
     | `Def (n, s) ->
@@ -136,7 +145,7 @@ let pp_mli_fun ~log api ppf f = match f.Oapi.fun_def with
     let pp_arg_typ ppf t =
       let open Oapi in
       match t.type_name, t.type_def with
-      | "", `Apply(c,p) -> pp ppf "%s %s" p c.type_name
+      | "", `Apply(c,p) -> pp ppf "[< %s ] %s" p c.type_name (* all constructors are based on polymorphic variants *)
       | s, `Constructor c -> pp ppf "'a %s" s
       | s, _  -> pp ppf "%s" s in
     let pp_arg_typ_sep ppf () = pp ppf " ->@ " in
